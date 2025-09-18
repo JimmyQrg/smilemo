@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Smilemo JS - Level 1 Demo</title>
+  <style>
+    canvas { background: #1a1a1a; display: block; margin: auto; }
+  </style>
+</head>
+<body>
+<canvas id="game" width="800" height="450"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let keys = {};
+document.addEventListener("keydown", e => keys[e.code] = true);
+document.addEventListener("keyup", e => keys[e.code] = false);
+
+class Player {
+  constructor() {
+    this.x = 50;
+    this.y = 350;
+    this.w = 28;
+    this.h = 28;
+    this.vx = 0;
+    this.vy = 0;
+    this.onGround = false;
+  }
+
+  update() {
+    // gravity
+    this.vy += 0.5;
+
+    // left/right controls (A, D, Left, Right)
+    if (keys["ArrowLeft"] || keys["KeyA"]) this.vx = -3;
+    else if (keys["ArrowRight"] || keys["KeyD"]) this.vx = 3;
+    else this.vx = 0;
+
+    // jump (Space or W or Up)
+    if ((keys["Space"] || keys["KeyW"] || keys["ArrowUp"]) && this.onGround) {
+      this.vy = -10;
+      this.onGround = false;
+    }
+
+    // apply velocity
+    this.x += this.vx;
+    this.y += this.vy;
+
+    // collision with platforms
+    this.onGround = false;
+    for (let p of platforms) {
+      if (this.x < p.x + p.w &&
+          this.x + this.w > p.x &&
+          this.y < p.y + p.h &&
+          this.y + this.h > p.y) {
+        // land on top
+        if (this.vy > 0) {
+          this.y = p.y - this.h;
+          this.vy = 0;
+          this.onGround = true;
+        }
+      }
+    }
+
+    // virus hazard collision
+    for (let v of viruses) {
+      if (this.x < v.x + v.w &&
+          this.x + this.w > v.x &&
+          this.y < v.y + v.h &&
+          this.y + this.h > v.y) {
+        // bounce randomly
+        this.vx = (Math.random() - 0.5) * 12;
+        this.vy = -12;
+      }
+    }
+
+    // boundaries
+    if (this.x < 0) this.x = 0;
+    if (this.x + this.w > canvas.width) this.x = canvas.width - this.w;
+    if (this.y > canvas.height) {
+      // reset if fall off screen
+      this.x = 50;
+      this.y = 350;
+      this.vx = this.vy = 0;
+    }
+  }
+
+  draw() {
+    // smiley face
+    ctx.fillStyle = "yellow";
+    ctx.beginPath();
+    ctx.arc(this.x + this.w/2, this.y + this.h/2, this.w/2, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = "black";
+    ctx.stroke();
+
+    // eyes
+    ctx.fillStyle = "black";
+    ctx.fillRect(this.x + 7, this.y + 8, 4, 6);
+    ctx.fillRect(this.x + 17, this.y + 8, 4, 6);
+    // smile
+    ctx.beginPath();
+    ctx.arc(this.x + this.w/2, this.y + this.h/2 + 2, 8, 0, Math.PI);
+    ctx.stroke();
+  }
+}
+
+class Platform {
+  constructor(x,y,w,h) {
+    this.x = x; this.y = y; this.w = w; this.h = h;
+  }
+  draw() {
+    ctx.fillStyle = "#444";
+    ctx.fillRect(this.x, this.y, this.w, this.h);
+  }
+}
+
+class Virus {
+  constructor(x,y,w,h) {
+    this.x = x; this.y = y; this.w = w; this.h = h;
+  }
+  draw() {
+    ctx.fillStyle = "red";
+    ctx.fillRect(this.x, this.y, this.w, this.h);
+  }
+}
+
+// make a simple first level
+let player = new Player();
+let platforms = [
+  new Platform(0, 420, 800, 30),   // ground
+  new Platform(200, 340, 120, 20),
+  new Platform(400, 280, 120, 20),
+  new Platform(600, 200, 120, 20)
+];
+let viruses = [
+  new Virus(300, 400, 30, 20),
+  new Virus(450, 260, 30, 20),
+  new Virus(650, 180, 30, 20)
+];
+
+function loop() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  player.update();
+  player.draw();
+
+  for (let p of platforms) p.draw();
+  for (let v of viruses) v.draw();
+
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
