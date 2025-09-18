@@ -2,9 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Smilemo JS - Level 1 Demo</title>
+  <title>Smilemo JS - Extended Level with Checkpoints</title>
   <style>
-    canvas { background: #1a1a1a; display: block; margin: auto; }
+    body { margin: 0; background: #000; }
+    canvas { background: #101010; display: block; margin: auto; }
   </style>
 </head>
 <body>
@@ -20,28 +21,41 @@ document.addEventListener("keyup", e => keys[e.code] = false);
 
 class Player {
   constructor() {
-    this.x = 50;
-    this.y = 350;
+    this.reset(50, 350);
+  }
+
+  reset(x, y) {
+    this.x = x;
+    this.y = y;
     this.w = 28;
     this.h = 28;
     this.vx = 0;
     this.vy = 0;
     this.onGround = false;
+    this.controlLocked = false;
+    this.lockTimer = 0;
   }
 
   update() {
+    if (this.controlLocked) {
+      this.lockTimer -= 1/60;
+      if (this.lockTimer <= 0) this.controlLocked = false;
+    }
+
     // gravity
     this.vy += 0.5;
 
-    // left/right controls (A, D, Left, Right)
-    if (keys["ArrowLeft"] || keys["KeyA"]) this.vx = -3;
-    else if (keys["ArrowRight"] || keys["KeyD"]) this.vx = 3;
-    else this.vx = 0;
+    if (!this.controlLocked) {
+      // left/right
+      if (keys["ArrowLeft"] || keys["KeyA"]) this.vx = -3;
+      else if (keys["ArrowRight"] || keys["KeyD"]) this.vx = 3;
+      else this.vx = 0;
 
-    // jump (Space or W or Up)
-    if ((keys["Space"] || keys["KeyW"] || keys["ArrowUp"]) && this.onGround) {
-      this.vy = -10;
-      this.onGround = false;
+      // jump
+      if ((keys["Space"] || keys["KeyW"] || keys["ArrowUp"]) && this.onGround) {
+        this.vy = -10;
+        this.onGround = false;
+      }
     }
 
     // apply velocity
@@ -55,7 +69,6 @@ class Player {
           this.x + this.w > p.x &&
           this.y < p.y + p.h &&
           this.y + this.h > p.y) {
-        // land on top
         if (this.vy > 0) {
           this.y = p.y - this.h;
           this.vy = 0;
@@ -64,45 +77,53 @@ class Player {
       }
     }
 
-    // virus hazard collision
+    // virus strike collision
     for (let v of viruses) {
       if (this.x < v.x + v.w &&
           this.x + this.w > v.x &&
           this.y < v.y + v.h &&
           this.y + this.h > v.y) {
-        // bounce randomly
-        this.vx = (Math.random() - 0.5) * 12;
+        this.vx = -6;   // knockback
         this.vy = -12;
+        this.controlLocked = true;
+        this.lockTimer = 1;
       }
     }
 
-    // boundaries
-    if (this.x < 0) this.x = 0;
-    if (this.x + this.w > canvas.width) this.x = canvas.width - this.w;
-    if (this.y > canvas.height) {
-      // reset if fall off screen
-      this.x = 50;
-      this.y = 350;
-      this.vx = this.vy = 0;
+    // checkpoint collision
+    for (let c of checkpoints) {
+      if (this.x < c.x + c.w &&
+          this.x + this.w > c.x &&
+          this.y < c.y + c.h &&
+          this.y + this.h > c.y) {
+        c.activated = true;
+        lastCheckpoint = { x: c.x, y: c.y - this.h };
+      }
+    }
+
+    // fall reset
+    if (this.y > canvas.height + 200) {
+      this.reset(lastCheckpoint.x, lastCheckpoint.y);
     }
   }
 
-  draw() {
+  draw(offsetX) {
     // smiley face
     ctx.fillStyle = "yellow";
     ctx.beginPath();
-    ctx.arc(this.x + this.w/2, this.y + this.h/2, this.w/2, 0, Math.PI*2);
+    ctx.arc(this.x - offsetX + this.w/2, this.y + this.h/2, this.w/2, 0, Math.PI*2);
     ctx.fill();
     ctx.strokeStyle = "black";
     ctx.stroke();
 
     // eyes
     ctx.fillStyle = "black";
-    ctx.fillRect(this.x + 7, this.y + 8, 4, 6);
-    ctx.fillRect(this.x + 17, this.y + 8, 4, 6);
+    ctx.fillRect(this.x - offsetX + 7, this.y + 8, 4, 6);
+    ctx.fillRect(this.x - offsetX + 17, this.y + 8, 4, 6);
+
     // smile
     ctx.beginPath();
-    ctx.arc(this.x + this.w/2, this.y + this.h/2 + 2, 8, 0, Math.PI);
+    ctx.arc(this.x - offsetX + this.w/2, this.y + this.h/2 + 2, 8, 0, Math.PI);
     ctx.stroke();
   }
 }
@@ -111,9 +132,9 @@ class Platform {
   constructor(x,y,w,h) {
     this.x = x; this.y = y; this.w = w; this.h = h;
   }
-  draw() {
-    ctx.fillStyle = "#444";
-    ctx.fillRect(this.x, this.y, this.w, this.h);
+  draw(offsetX) {
+    ctx.fillStyle = "#00cc44"; // green
+    ctx.fillRect(this.x - offsetX, this.y, this.w, this.h);
   }
 }
 
@@ -121,34 +142,61 @@ class Virus {
   constructor(x,y,w,h) {
     this.x = x; this.y = y; this.w = w; this.h = h;
   }
-  draw() {
+  draw(offsetX) {
     ctx.fillStyle = "red";
-    ctx.fillRect(this.x, this.y, this.w, this.h);
+    ctx.fillRect(this.x - offsetX, this.y, this.w, this.h);
   }
 }
 
-// make a simple first level
+class Checkpoint {
+  constructor(x,y) {
+    this.x = x;
+    this.y = y;
+    this.w = 24;
+    this.h = 24;
+    this.activated = false;
+  }
+  draw(offsetX) {
+    ctx.fillStyle = this.activated ? "cyan" : "blue";
+    ctx.fillRect(this.x - offsetX, this.y, this.w, this.h);
+  }
+}
+
 let player = new Player();
-let platforms = [
-  new Platform(0, 420, 800, 30),   // ground
-  new Platform(200, 340, 120, 20),
-  new Platform(400, 280, 120, 20),
-  new Platform(600, 200, 120, 20)
-];
-let viruses = [
-  new Virus(300, 400, 30, 20),
-  new Virus(450, 260, 30, 20),
-  new Virus(650, 180, 30, 20)
-];
+
+// base level scaled 100x
+let platforms = [];
+let viruses = [];
+let checkpoints = [];
+let lastCheckpoint = { x: 50, y: 350 };
+
+// ground floor (long)
+platforms.push(new Platform(0, 420, 800*100, 30));
+
+// floating platforms & viruses
+for (let i=1; i<=100; i++) {
+  if (i % 15 === 0) platforms.push(new Platform(i*300, 340, 120, 20));
+  if (i % 20 === 0) platforms.push(new Platform(i*300, 260, 120, 20));
+  if (i % 10 === 0) viruses.push(new Virus(i*250, 380, 10, 60)); // strike
+  if (i % 25 === 0) viruses.push(new Virus(i*300+60, 240, 10, 60)); 
+  if (i % 30 === 0) checkpoints.push(new Checkpoint(i*300, 300));
+}
 
 function loop() {
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
   player.update();
-  player.draw();
 
-  for (let p of platforms) p.draw();
-  for (let v of viruses) v.draw();
+  // camera
+  let offsetX = player.x - canvas.width/2;
+  if (offsetX < 0) offsetX = 0;
+
+  // draw level
+  for (let p of platforms) p.draw(offsetX);
+  for (let v of viruses) v.draw(offsetX);
+  for (let c of checkpoints) c.draw(offsetX);
+
+  player.draw(offsetX);
 
   requestAnimationFrame(loop);
 }
